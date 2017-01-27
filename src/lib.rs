@@ -1,10 +1,22 @@
 extern crate time;
 extern crate fnv;
 
-use std::io::{Result, Write};
+use std::io::{self, Write};
 use std::fs::{File, OpenOptions};
 use std::ptr;
 use fnv::FnvHashMap;
+
+/// Enumeration of possible Counter-related errors
+pub enum Error {
+    /// Occurs when buffers are full and must be flushed to storage
+    MustFlushCounter,
+    /// Occurs when an IO-related error occurs during Counter operations
+    IO(io::Error),
+}
+
+/// Custom Counter Result type that always returns a Counter::Error
+/// as the error type
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Copy)]
 struct Buffer {
@@ -62,14 +74,18 @@ impl Clone for Buffer {
     }
 }
 
+/// Trait for buffer writers
 trait WriteBuffer {
     fn write(&mut self, buf: &Buffer) -> Result<()>;
 }
 
+/// Trait for Counter data writers
 trait WriteCounterData {
     fn write(&mut self, data: &FnvHashMap<String, Buffer>) -> Result<()>;
 }
 
+/// Default writer for the counter that writes data
+/// to a file
 struct CounterFileWriter {
     file: File,
     current_day: i32,
@@ -81,19 +97,13 @@ impl CounterFileWriter {
         let path = CounterFileWriter::gen_path(&now);
 
         let mut write_header = false;
-        let mut file = try!(OpenOptions::new()
-            .append(true)
-            .open(&path)
-            .or_else(|_| {
-                write_header = true;
-                OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&path)
-            }));
+        let mut file = try!(CounterFileWriter::open_append(&path).or_else(|_| {
+            write_header = true;
+            CounterFileWriter::open_new(&path)
+        }));
         if write_header {
-            let today = CounterFileWriter::get_day(&now).to_timespec();
-            try!(file.write_all(&format!("{};", today.sec).into_bytes()));
+            let today = CounterFileWriter::get_day_start(&now).to_timespec();
+            try!(file.write_all(&format!("{};", today.sec).into_bytes()).map_err(Error::IO));
         }
 
         Ok(CounterFileWriter {
@@ -102,11 +112,32 @@ impl CounterFileWriter {
         })
     }
 
+    /// Opens a file at path for appending. File
+    /// must exist
+    fn open_append(path: &str) -> Result<File> {
+        OpenOptions::new()
+            .append(true)
+            .open(path)
+            .map_err(Error::IO)
+    }
+
+    /// Opens a new file at path. File must not exist
+    fn open_new(path: &str) -> Result<File> {
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(Error::IO)
+    }
+
+    /// Generate a file path name for given the time
     fn gen_path(tm: &time::Tm) -> String {
         format!("counter-{}-{}.dat", tm.tm_yday, 1900 + tm.tm_year)
     }
 
-    fn get_day(now: &time::Tm) -> time::Tm {
+    /// Return a time at 00:00:00 of the same day
+    /// as the given time
+    fn get_day_start(now: &time::Tm) -> time::Tm {
         time::Tm {
             tm_sec: 0,
             tm_min: 0,
@@ -125,6 +156,7 @@ impl CounterFileWriter {
 
 impl WriteCounterData for CounterFileWriter {
     fn write(&mut self, data: &FnvHashMap<String, Buffer>) -> Result<()> {
+
         Ok(())
     }
 }
@@ -145,14 +177,13 @@ impl Counter {
 
     pub fn incr(&mut self, key: &str) -> Result<()> {
         let bi = time::get_time().sec;
-        let mut buf = self.data[key];
+        let mut buf = self.data.entry(key.to_owned()).or_insert(Buffer::new());
         if buf.contains(bi) {
             buf.incr(bi);
+            Ok(())
         } else {
-            try!(self.flush(bi));
-            buf.incr(bi);
+            Err(Error::MustFlushCounter)
         }
-        Ok(())
     }
 
     fn flush(&mut self, start: i64) -> Result<()> {
