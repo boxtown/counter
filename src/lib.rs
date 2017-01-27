@@ -1,8 +1,10 @@
 extern crate time;
+extern crate fnv;
 
-use std::ptr;
 use std::io::{Result, Write};
 use std::fs::{File, OpenOptions};
+use std::ptr;
+use fnv::FnvHashMap;
 
 #[derive(Copy)]
 struct Buffer {
@@ -65,7 +67,7 @@ trait WriteBuffer {
 }
 
 trait WriteCounterData {
-    fn write(&mut self, data: &[Buffer]) -> Result<()>;
+    fn write(&mut self, data: &FnvHashMap<String, Buffer>) -> Result<()>;
 }
 
 struct CounterFileWriter {
@@ -122,13 +124,13 @@ impl CounterFileWriter {
 }
 
 impl WriteCounterData for CounterFileWriter {
-    fn write(&mut self, data: &[Buffer]) -> Result<()> {
+    fn write(&mut self, data: &FnvHashMap<String, Buffer>) -> Result<()> {
         Ok(())
     }
 }
 
 pub struct Counter {
-    data: [Buffer; 35 * 256],
+    data: FnvHashMap<String, Buffer>,
     writer: CounterFileWriter,
 }
 
@@ -136,77 +138,29 @@ impl Counter {
     pub fn new() -> Result<Counter> {
         let writer = try!(CounterFileWriter::new());
         Ok(Counter {
-            data: [Buffer::new(); 35 * 256],
+            data: FnvHashMap::default(),
             writer: writer,
         })
     }
 
     pub fn incr(&mut self, key: &str) -> Result<()> {
-        let i = hash(key);
         let bi = time::get_time().sec;
-        if self.data[i].contains(bi) {
-            self.data[i].incr(bi);
+        let mut buf = self.data[key];
+        if buf.contains(bi) {
+            buf.incr(bi);
         } else {
             try!(self.flush(bi));
-            self.data[i].incr(bi);
+            buf.incr(bi);
         }
         Ok(())
     }
 
     fn flush(&mut self, start: i64) -> Result<()> {
         try!(self.writer.write(&self.data));
-        for buf in self.data.iter_mut() {
+        for buf in self.data.values_mut() {
             buf.reset_at(start);
         }
         Ok(())
-    }
-}
-
-// Hashes a string by summing the translated values of its characters
-fn hash(key: &str) -> usize {
-    key.chars().fold(0, |acc, c| acc + char_value(c))
-}
-
-// The value of a valid counter key character
-fn char_value(c: char) -> usize {
-    match c {
-        '0' => 0,
-        '1' => 1,
-        '2' => 2,
-        '3' => 3,
-        '4' => 4,
-        '5' => 5,
-        '6' => 6,
-        '7' => 7,
-        '8' => 8,
-        '9' => 9,
-        'a' | 'A' => 10,
-        'b' | 'B' => 11,
-        'c' | 'C' => 12,
-        'd' | 'D' => 13,
-        'e' | 'E' => 14,
-        'f' | 'F' => 15,
-        'g' | 'G' => 16,
-        'h' | 'H' => 17,
-        'i' | 'I' => 18,
-        'j' | 'J' => 19,
-        'k' | 'K' => 20,
-        'l' | 'L' => 21,
-        'm' | 'M' => 22,
-        'n' | 'N' => 23,
-        'o' | 'O' => 24,
-        'p' | 'P' => 25,
-        'q' | 'Q' => 26,
-        'r' | 'R' => 27,
-        's' | 'S' => 28,
-        't' | 'T' => 29,
-        'u' | 'U' => 30,
-        'v' | 'V' => 31,
-        'w' | 'W' => 32,
-        'x' | 'X' => 33,
-        'y' | 'Y' => 34,
-        'z' | 'Z' => 35,
-        _ => panic!("Unsupported character {}", c),
     }
 }
 

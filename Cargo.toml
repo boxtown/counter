@@ -5,3 +5,4 @@ authors = ["Michael Ma <michael60612@gmail.com>"]
 
 [dependencies]
 time = "0.1"
+fnv = "1.0.5"
