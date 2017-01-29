@@ -13,6 +13,8 @@ use writer::CounterFileWriter;
 pub enum Error {
     /// Occurs when buffers are full and must be flushed to storage
     MustFlushCounter,
+    /// Occurs when incr is out of bounds
+    IndexOutOfBounds,
     /// Occurs when an IO-related error occurs during Counter operations
     IO(io::Error),
 }
@@ -33,6 +35,7 @@ pub struct Counter<T>
     where T: WriteCounterData
 {
     data: DataMap,
+    global_start: i64,
     writer: T,
 }
 
@@ -43,6 +46,7 @@ impl<T> Counter<T>
         let writer = try!(CounterFileWriter::new());
         Ok(Counter {
             data: DataMap::default(),
+            global_start: time::get_time().sec,
             writer: writer,
         })
     }
@@ -50,21 +54,17 @@ impl<T> Counter<T>
     pub fn with_writer(writer: T) -> Counter<T> {
         Counter {
             data: DataMap::default(),
+            global_start: time::get_time().sec,
             writer: writer,
         }
     }
 
     pub fn incr(&mut self, key: &str) -> Result<()> {
         let bi = time::get_time().sec;
-        let mut buf = self.data.entry(key.to_owned()).or_insert(Buffer::new());
-        if buf.contains(bi) {
-            unsafe {
-                buf.incr(bi);// Opens a file at path for appending. File
-            }
-            Ok(())
-        } else {
-            Err(Error::MustFlushCounter)
-        }
+        let mut buf = self.data
+            .entry(key.to_owned())
+            .or_insert(Buffer::start_at(self.global_start));
+        buf.incr(bi).map_err(|_| Error::MustFlushCounter)
     }
 
     pub fn flush(&mut self, start: i64) -> Result<()> {
@@ -72,6 +72,7 @@ impl<T> Counter<T>
         for buf in self.data.values_mut() {
             buf.reset_at(start);
         }
+        self.global_start = start;
         Ok(())
     }
 }

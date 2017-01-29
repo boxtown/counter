@@ -1,5 +1,6 @@
 use std::ptr;
 use time;
+use super::{Result, Error};
 
 #[derive(Copy)]
 pub struct Buffer {
@@ -31,8 +32,19 @@ impl Buffer {
         index >= self.start && index <= self.end
     }
 
+    pub fn incr(&mut self, index: i64) -> Result<()> {
+        if self.contains(index) {
+            unsafe {
+                self.incr_unsafe(index);
+            }
+            Ok(())
+        } else {
+            Err(Error::IndexOutOfBounds)
+        }
+    }
+
     /// Unsafe because it skips bounds checking
-    pub unsafe fn incr(&mut self, index: i64) {
+    pub unsafe fn incr_unsafe(&mut self, index: i64) {
         let i = (index - self.start) as usize;
         let elem = self.data.get_unchecked_mut(i);
         *elem += 1;
