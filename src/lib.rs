@@ -2,7 +2,9 @@ extern crate time;
 extern crate fnv;
 
 pub mod buffer;
+pub mod reader;
 pub mod writer;
+pub mod bit_vec;
 
 use std::io;
 use fnv::FnvHashMap;
