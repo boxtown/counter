@@ -39,16 +39,8 @@ impl BitVec {
     }
 
     pub fn set_block(&mut self, index: usize, block: u64) {
-        if self.out_of_bounds(index) {
-            if index % 64 == 0 {
-                // offset is block-aligned, no need to add
-                // extra block for new block
-                self.data.resize(blocks(index + 1), 0);
-            } else {
-                // offset is not block-aligned, new block will extend
-                // past number of blocks needed to cover index + 1 bits
-                self.data.resize(blocks(index + 1) + 1, 0);
-            }
+        if self.out_of_bounds(index + 63) {
+            self.data.resize(blocks(index + 64), 0);
         }
 
         //  Algorithm example:
@@ -127,7 +119,7 @@ impl BitVec {
     }
 
     fn set_next_block(&mut self, index: usize, block: u64) {
-        let mut cur_block = &mut self.data[block_i(index) + 1];
+        let mut cur_block = self.next_block_mut(index);
         let offset = offset_i(index) as u64;
         let mask = !0 >> (64 - (offset + 1));
         let data = block << (offset + 1);
@@ -140,6 +132,10 @@ impl BitVec {
 
     fn block_mut(&mut self, index: usize) -> &mut u64 {
         &mut self.data[block_i(index)]
+    }
+
+    fn next_block_mut(&mut self, index: usize) -> &mut u64 {
+        &mut self.data[block_i(index) + 1]
     }
 
     fn out_of_bounds(&self, index: usize) -> bool {
