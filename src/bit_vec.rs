@@ -120,16 +120,15 @@ impl BitVec {
 
     fn set_cur_block(&mut self, index: usize, block: u64) {
         let mut cur_block = self.block_mut(index);
-        let offset = offset_i(index);
+        let offset = offset_i(index) as u64;
         let mask = !0 << (offset + 1);
         let data = block >> (64 - (offset + 1));
-        println!("{:b}", mask >> 4);
         *cur_block = (*cur_block & mask) | data;
     }
 
     fn set_next_block(&mut self, index: usize, block: u64) {
         let mut cur_block = &mut self.data[block_i(index) + 1];
-        let offset = offset_i(index);
+        let offset = offset_i(index) as u64;
         let mask = !0 >> (64 - (offset + 1));
         let data = block << (offset + 1);
         *cur_block = (*cur_block & mask) | data;
@@ -189,7 +188,9 @@ mod test {
     fn test_set_block() {
         let mut vec = BitVec::new();
         vec.set_block(3, !0);
-        println!("{:b}", vec.data[0]);
-        assert_eq!(1, 2);
+        assert_eq!(0, vec.get_bit(2));
+        assert_eq!(1, vec.get_bit(3));
+        assert_eq!(1, vec.get_bit(66));
+        assert_eq!(0, vec.get_bit(67));
     }
 }
