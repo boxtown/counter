@@ -38,6 +38,17 @@ impl BitVec {
         }
     }
 
+    pub fn get_block(&self, index: usize) -> u64 {
+        let block = self.block(index);
+        let offset = offset_i(index);
+        if offset == 63 {
+            return *block;
+        }
+        let result = 0;
+        let mut mask = !0 >> 63 - offset;
+        result
+    }
+
     pub fn set_block(&mut self, index: usize, block: u64) {
         if self.out_of_bounds(index + 63) {
             self.data.resize(blocks(index + 64), 0);
@@ -112,7 +123,7 @@ impl BitVec {
 
     fn set_cur_block(&mut self, index: usize, block: u64) {
         let mut cur_block = self.block_mut(index);
-        let offset = offset_i(index) as u64;
+        let offset = offset_i(index);
         let mask = !0 << (offset + 1);
         let data = block >> (64 - (offset + 1));
         *cur_block = (*cur_block & mask) | data;
@@ -120,7 +131,7 @@ impl BitVec {
 
     fn set_next_block(&mut self, index: usize, block: u64) {
         let mut cur_block = self.next_block_mut(index);
-        let offset = offset_i(index) as u64;
+        let offset = offset_i(index);
         let mask = !0 >> (64 - (offset + 1));
         let data = block << (offset + 1);
         *cur_block = (*cur_block & mask) | data;
@@ -149,8 +160,8 @@ fn block_i(index: usize) -> usize {
 }
 
 /// Returns the 0-based block offset for index
-fn offset_i(index: usize) -> usize {
-    63 - index % 64
+fn offset_i(index: usize) -> u64 {
+    63 - index as u64 % 64
 }
 
 /// Returns the number of 32 bit blocks it takes to contain
