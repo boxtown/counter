@@ -16,7 +16,7 @@ impl BitVec {
             return 0;
         }
 
-        let block = self.block(index);
+        let block = unsafe { self.block(index) };
         let offset = offset_i(index);
         let mask = 1 << offset;
         (block & mask) >> offset
@@ -27,7 +27,7 @@ impl BitVec {
             self.data.resize(blocks(index + 1), 0);
         }
 
-        let mut block = self.block_mut(index);
+        let mut block = unsafe { self.block_mut(index) };
         let offset = offset_i(index);
         if value {
             let mask = 1 << offset;
@@ -39,7 +39,7 @@ impl BitVec {
     }
 
     pub fn get_block(&self, index: usize) -> u64 {
-        let block = self.block(index);
+        let block = unsafe { self.block(index) };
         let offset = offset_i(index);
         if offset == 63 {
             return *block;
@@ -122,7 +122,7 @@ impl BitVec {
     }
 
     fn set_cur_block(&mut self, index: usize, block: u64) {
-        let mut cur_block = self.block_mut(index);
+        let mut cur_block = unsafe { self.block_mut(index) };
         let offset = offset_i(index);
         let mask = !0 << (offset + 1);
         let data = block >> (64 - (offset + 1));
@@ -130,23 +130,23 @@ impl BitVec {
     }
 
     fn set_next_block(&mut self, index: usize, block: u64) {
-        let mut cur_block = self.next_block_mut(index);
+        let mut cur_block = unsafe { self.next_block_mut(index) };
         let offset = offset_i(index);
         let mask = !0 >> (64 - (offset + 1));
         let data = block << (offset + 1);
         *cur_block = (*cur_block & mask) | data;
     }
 
-    fn block(&self, index: usize) -> &u64 {
-        &self.data[block_i(index)]
+    unsafe fn block(&self, index: usize) -> &u64 {
+        self.data.get_unchecked(block_i(index))
     }
 
-    fn block_mut(&mut self, index: usize) -> &mut u64 {
-        &mut self.data[block_i(index)]
+    unsafe fn block_mut(&mut self, index: usize) -> &mut u64 {
+        self.data.get_unchecked_mut(block_i(index))
     }
 
-    fn next_block_mut(&mut self, index: usize) -> &mut u64 {
-        &mut self.data[block_i(index) + 1]
+    unsafe fn next_block_mut(&mut self, index: usize) -> &mut u64 {
+        self.block_mut(block_i(index) + 1)
     }
 
     fn out_of_bounds(&self, index: usize) -> bool {

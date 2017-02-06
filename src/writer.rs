@@ -138,53 +138,53 @@ impl WriteCounterData for CounterFileWriter {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::CounterFileWriter;
-    use buffer::Buffer;
-    use DataMap;
+// #[cfg(test)]
+// mod test {
+//     use super::CounterFileWriter;
+//     use buffer::Buffer;
+//     use DataMap;
 
-    #[test]
-    fn test_guess_size() {
-        let mut data = DataMap::default();
-        data.insert("test1".to_owned(), Buffer::start_at(0));
-        data.insert("test2".to_owned(), Buffer::start_at(0));
-        unsafe {
-            data.get_mut("test1").unwrap().incr(0);
-            data.get_mut("test2").unwrap().incr(1);
-            data.get_mut("test2").unwrap().incr(2);
-        }
-        let size = CounterFileWriter::guess_size(&data);
-        assert_eq!(size, 64);
-    }
+//     #[test]
+//     fn test_guess_size() {
+//         let mut data = DataMap::default();
+//         data.insert("test1".to_owned(), Buffer::start_at(0));
+//         data.insert("test2".to_owned(), Buffer::start_at(0));
+//         unsafe {
+//             data.get_mut("test1").unwrap().incr(0);
+//             data.get_mut("test2").unwrap().incr(1);
+//             data.get_mut("test2").unwrap().incr(2);
+//         }
+//         let size = CounterFileWriter::guess_size(&data);
+//         assert_eq!(size, 64);
+//     }
 
-    #[test]
-    fn test_write_buffer() {
-        let mut buf = Buffer::start_at(1500);
-        unsafe {
-            buf.incr(1505);
-            buf.incr(1505);
-            buf.incr(1532);
-            buf.incr(1516);
-            buf.incr(1516);
-            buf.incr(1516);
-        }
-        let mut s_buf = String::new();
-        CounterFileWriter::write_buffer(200, &buf, &mut s_buf);
-        assert_eq!(s_buf, "1305:2,1316:3,1332:1")
-    }
+//     #[test]
+//     fn test_write_buffer() {
+//         let mut buf = Buffer::start_at(1500);
+//         unsafe {
+//             buf.incr(1505);
+//             buf.incr(1505);
+//             buf.incr(1532);
+//             buf.incr(1516);
+//             buf.incr(1516);
+//             buf.incr(1516);
+//         }
+//         let mut s_buf = String::new();
+//         CounterFileWriter::write_buffer(200, &buf, &mut s_buf);
+//         assert_eq!(s_buf, "1305:2,1316:3,1332:1")
+//     }
 
-    #[test]
-    fn test_write_data_to_string() {
-        let mut data = DataMap::default();
-        data.insert("test1".to_owned(), Buffer::start_at(1500));
-        data.insert("test2".to_owned(), Buffer::start_at(1500));
-        unsafe {
-            data.get_mut("test1").unwrap().incr(1500);
-            data.get_mut("test2").unwrap().incr(1501);
-            data.get_mut("test2").unwrap().incr(1502);
-        }
-        let result = CounterFileWriter::write_data_to_string(200, &data);
-        assert_eq!(result, "{test1;1300:1}{test2;1301:1,1302:1}");
-    }
-}
+//     #[test]
+//     fn test_write_data_to_string() {
+//         let mut data = DataMap::default();
+//         data.insert("test1".to_owned(), Buffer::start_at(1500));
+//         data.insert("test2".to_owned(), Buffer::start_at(1500));
+//         unsafe {
+//             data.get_mut("test1").unwrap().incr(1500);
+//             data.get_mut("test2").unwrap().incr(1501);
+//             data.get_mut("test2").unwrap().incr(1502);
+//         }
+//         let result = CounterFileWriter::write_data_to_string(200, &data);
+//         assert_eq!(result, "{test1;1300:1}{test2;1301:1,1302:1}");
+//     }
+// }
