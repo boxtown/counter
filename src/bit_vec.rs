@@ -146,7 +146,7 @@ impl BitVec {
     }
 
     unsafe fn next_block_mut(&mut self, index: usize) -> &mut u64 {
-        self.block_mut(block_i(index) + 1)
+        self.data.get_unchecked_mut(block_i(index) + 1)
     }
 
     fn out_of_bounds(&self, index: usize) -> bool {
