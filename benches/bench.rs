@@ -23,7 +23,7 @@ mod tests {
         let mut v = BitVec::new();
         v.set_bit(512, true);
         bench.iter(|| {
-            v.get_bit(100);
+            v.get_bit(100)
         })
     }
 
@@ -38,7 +38,16 @@ mod tests {
     }
 
     #[bench]
-    fn bench_vec(bench: &mut Bencher) {
+    fn bench_get_block(bench: &mut Bencher) {
+        let mut v = BitVec::new();
+        v.set_block(105, !0);
+        bench.iter(|| {
+            v.get_block(102)
+        })
+    }
+
+    #[bench]
+    fn bench_vec_push(bench: &mut Bencher) {
         let mut v: Vec<u64> = Vec::new();
         bench.iter(|| {
             v.push(1);
