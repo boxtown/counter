@@ -39,14 +39,87 @@ impl BitVec {
     }
 
     pub fn get_block(&self, index: usize) -> u64 {
+        // Algorithm example:
+        //
+        // Let index = 64 (block aligned)
+        //
+        // Blocks:
+        //
+        // |--------||--------|
+        // |   0    ||   1    |
+        // |--------||--------|
+        //                ^
+        //                |
+        //             block (64 / 64 == 1)
+        //
+        // Block 1:
+        //
+        // |----------------------------------------------------------------|
+        // |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
+        // |----------------------------------------------------------------|
+        //  ^
+        //  |
+        // offset (canonical index: 0, actual bit index: 63)
+        // 63 - 64 % 64 = 63
+        //
+        // Since offset is block aligned we simply return the block
+        //
+        // Let index = 67 (not block aligned)
+        //
+        // Block index is the same as when index = 64
+        //
+        // Block 1:
+        //
+        // |----------------------------------------------------------------|
+        // |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
+        // |----------------------------------------------------------------|
+        //     ^
+        //     |
+        //  offset (canonical index: 3, actual bit index: 60)
+        //  63 - 67 % 64 = 60
+        //
+        // Step 1: Shift current block 3 (63 - offset) bits to the left
+        // Step 2: OR shifted block with empty result block
+        //
+        // Let block 1 be:
+        //
+        // 10101100 11110000 00000000 11111111 00000000 000000000 00000000 11111111
+        //
+        // Result block after OR:
+        //
+        // 01100111 10000000 00000111 11111999 00000000 00000000 00000111 11111000
+        //
+        // Step 3: Grab next block
+        // Step 4: Calculate amount of desired bits (64 - (offset + 1) == 3)
+        // Step 5: Right shift next block 61 bits (offset + 1)
+        // Step 6: OR result
+        //
+        // Let next block be:
+        //
+        // 01011000 10001111 00001111 11110000 00000000 1111111 11111111 00000000
+        //
+        // Block after shifting:
+        // 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000010
+        //
+        // Returned block:
+        //
+        // 01100111 10000000 00000111 11111999 00000000 00000000 00000111 11111010
+        if block_i(index) >= self.data.len() {
+            // returns 0 if out of bounds
+            return 0;
+        }
         let block = unsafe { self.block(index) };
         let offset = offset_i(index);
         if offset == 63 {
             return *block;
         }
-        let result = 0;
-        let mut mask = !0 >> 63 - offset;
-        result
+        let result = 0 | (*block << (63 - offset));
+        if block_i(index) + 1 >= self.data.len() {
+            // return early if out of bounds
+            return result;
+        }
+        let next_block = unsafe { self.next_block(index) };
+        result | (*next_block >> (offset + 1))
     }
 
     pub fn set_block(&mut self, index: usize, block: u64) {
@@ -54,29 +127,29 @@ impl BitVec {
             self.data.resize(blocks(index + 64), 0);
         }
 
-        //  Algorithm example:
+        // Algorithm example:
         //
-        //  Let index = 67
+        // Let index = 67
         //
-        //  Blocks after resize:
+        // Blocks after resize:
         //
-        //  |--------||--------||--------|
-        //  |    0   ||    1   ||   2    |
-        //  |--------||--------||--------|
-        //                 ^
-        //                 |
-        //             cur_block (67 % 64 == 3, ergo 67 / 64 + 1 = 1)
+        // |--------||--------||--------|
+        // |    0   ||    1   ||   2    |
+        // |--------||--------||--------|
+        //                ^
+        //                |
+        //            cur_block (67 / 64 == 1)
         //
-        //  Block 1:
+        // Block 1:
         //
-        //  |----------------------------------------------------------------|
-        //  |0000000000000000000000000000000000000000000000000000000000000000|
-        //  |----------------------------------------------------------------|
-        //      ^
-        //      |
-        //    cur_offset (canonical index: 3, actual bit index: 60)
-        //    63 - 67 % 64 = 60. We do 63 - x so that bit indexes start
-        //    at bit 63 and work to bit 0 so that blocks are contiguous
+        // |----------------------------------------------------------------|
+        // |0000000000000000000000000000000000000000000000000000000000000000|
+        // |----------------------------------------------------------------|
+        //     ^
+        //     |
+        //   cur_offset (canonical index: 3, actual bit index: 6-)
+        //   63 - 67 % 64 = 60. We do 63 - x so that bit indexes start
+        //   at bit 63 and work to bit 0 so that blocks are contiguous
         //
         // Let input block be:
         //
@@ -124,7 +197,7 @@ impl BitVec {
     fn set_cur_block(&mut self, index: usize, block: u64) {
         let mut cur_block = unsafe { self.block_mut(index) };
         let offset = offset_i(index);
-        let mask = !0 << (offset + 1);
+        let mask = if offset == 63 { !0 } else { !0 << (offset + 1) };
         let data = block >> (64 - (offset + 1));
         *cur_block = (*cur_block & mask) | data;
     }
@@ -143,6 +216,10 @@ impl BitVec {
 
     unsafe fn block_mut(&mut self, index: usize) -> &mut u64 {
         self.data.get_unchecked_mut(block_i(index))
+    }
+
+    unsafe fn next_block(&self, index: usize) -> &u64 {
+        self.data.get_unchecked(block_i(index) + 1)
     }
 
     unsafe fn next_block_mut(&mut self, index: usize) -> &mut u64 {
@@ -194,10 +271,22 @@ mod test {
     #[test]
     fn test_set_block() {
         let mut vec = BitVec::new();
-        vec.set_block(3, !0);
-        assert_eq!(0, vec.get_bit(2));
-        assert_eq!(1, vec.get_bit(3));
-        assert_eq!(1, vec.get_bit(66));
-        assert_eq!(0, vec.get_bit(67));
+        vec.set_block(4, !0);
+        assert_eq!(0, vec.get_bit(3));
+        assert_eq!(1, vec.get_bit(4));
+        assert_eq!(1, vec.get_bit(67));
+        assert_eq!(0, vec.get_bit(68));
+    }
+
+    #[test]
+    fn test_get_block() {
+        let mut vec = BitVec::new();
+        vec.set_block(0, !0);
+        assert_eq!(!0, vec.get_block(0));
+        vec.set_block(67, !0);
+        assert_eq!(!0, vec.get_block(67));
+        vec.set_block(256, !0);
+        assert_eq!(!0, vec.get_block(256));
+        assert_eq!(!0u64 << 2, vec.get_block(258));
     }
 }
