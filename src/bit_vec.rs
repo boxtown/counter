@@ -11,9 +11,7 @@ impl BitVec {
         BitVec { data: Vec::with_capacity(blocks(nbits)) }
     }
 
-    /// Returns the 1-based index of the last set bit in the vector,
-    /// otherwise called the length of the vector
-    pub fn len(&self) -> usize {
+    pub fn last_set_bit(&self) -> usize {
         if self.data.len() == 0 {
             return 0;
         }
@@ -269,13 +267,13 @@ mod test {
         vec.set_bit(0, true);
         vec.set_bit(5, true);
         vec.set_bit(10, true);
-        assert_eq!(vec.len(), 11);
+        assert_eq!(vec.last_set_bit(), 11);
         assert_eq!(1, vec.get_bit(0));
         assert_eq!(1, vec.get_bit(5));
         assert_eq!(1, vec.get_bit(10));
         assert_eq!(0, vec.get_bit(32));
         vec.set_bit(10, false);
-        assert_eq!(vec.len(), 6);
+        assert_eq!(vec.last_set_bit(), 6);
         assert_eq!(0, vec.get_bit(10));
     }
 
@@ -283,7 +281,7 @@ mod test {
     fn test_set_block() {
         let mut vec = BitVec::new();
         vec.set_block(4, !0);
-        assert_eq!(vec.len(), 68);
+        assert_eq!(vec.last_set_bit(), 68);
         assert_eq!(0, vec.get_bit(3));
         assert_eq!(1, vec.get_bit(4));
         assert_eq!(1, vec.get_bit(67));
