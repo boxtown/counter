@@ -11,6 +11,8 @@ impl BitVec {
         BitVec { data: Vec::with_capacity(blocks(nbits)) }
     }
 
+    /// Returns the 1-based index of the last set bit in the vector,
+    /// otherwise called the length of the vector
     pub fn len(&self) -> usize {
         if self.data.len() == 0 {
             return 0;
