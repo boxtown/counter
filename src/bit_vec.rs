@@ -11,14 +11,6 @@ impl BitVec {
         BitVec { data: Vec::with_capacity(blocks(nbits)) }
     }
 
-    pub fn last_set_bit(&self) -> usize {
-        if self.data.len() == 0 {
-            return 0;
-        }
-        let last_block = unsafe { self.data.get_unchecked(self.data.len() - 1) };
-        (self.data.len() - 1) * 64 + (64 - last_block.trailing_zeros() as usize)
-    }
-
     pub fn get_bit(&self, index: usize) -> u64 {
         if self.out_of_bounds(index) {
             return 0;
@@ -267,7 +259,6 @@ mod test {
         vec.set_bit(0, true);
         vec.set_bit(5, true);
         vec.set_bit(10, true);
-        assert_eq!(vec.last_set_bit(), 11);
         assert_eq!(1, vec.get_bit(0));
         assert_eq!(1, vec.get_bit(5));
         assert_eq!(1, vec.get_bit(10));
@@ -281,7 +272,6 @@ mod test {
     fn test_set_block() {
         let mut vec = BitVec::new();
         vec.set_block(4, !0);
-        assert_eq!(vec.last_set_bit(), 68);
         assert_eq!(0, vec.get_bit(3));
         assert_eq!(1, vec.get_bit(4));
         assert_eq!(1, vec.get_bit(67));

@@ -9,13 +9,6 @@ mod tests {
     use counter::bit_vec::BitVec;
 
     #[bench]
-    fn bench_last_set_bit(bench: &mut Bencher) {
-        let mut v = BitVec::new();
-        v.set_bit(128, true);
-        bench.iter(|| v.last_set_bit())
-    }
-
-    #[bench]
     fn bench_set_bit(bench: &mut Bencher) {
         let mut i = 0;
         let mut v = BitVec::new();
