@@ -1,3 +1,25 @@
+pub struct AppendOnlyBitVec {
+    vec: BitVec,
+}
+
+impl AppendOnlyBitVec {
+    pub fn new() -> AppendOnlyBitVec {
+        AppendOnlyBitVec { vec: BitVec::new() }
+    }
+
+    pub fn with_capacity(nbits: usize) -> AppendOnlyBitVec {
+        AppendOnlyBitVec { vec: BitVec::with_capacity(nbits) }
+    }
+
+    pub fn get_bit(&self, index: usize) -> bool {
+        self.vec.get_bit(index)
+    }
+
+    pub fn get_block(&self, index: usize) -> u64 {
+        self.vec.get_block(index)
+    }
+}
+
 pub struct BitVec {
     data: Vec<u64>,
 }
@@ -11,15 +33,15 @@ impl BitVec {
         BitVec { data: Vec::with_capacity(blocks(nbits)) }
     }
 
-    pub fn get_bit(&self, index: usize) -> u64 {
+    pub fn get_bit(&self, index: usize) -> bool {
         if self.out_of_bounds(index) {
-            return 0;
+            return false;
         }
 
         let block = unsafe { self.block(index) };
         let offset = offset_i(index);
         let mask = 1 << offset;
-        (block & mask) >> offset
+        (block & mask) >> offset == 1
     }
 
     pub fn set_bit(&mut self, index: usize, value: bool) {
@@ -187,20 +209,29 @@ impl BitVec {
         //      ^
         //      |
         //   block << 61 == block << offset_i(67) + 1
-        self.set_cur_block(index, block);
-        if index % 64 != 0 {
+        if !self.set_cur_block(index, block) {
             self.set_next_block(index, block);
         }
     }
 
-    fn set_cur_block(&mut self, index: usize, block: u64) {
+    // Sets 64 - block_offset bits in the block indicated by index at
+    // block_offset. Returns true if index is blocked aligned, false otherwise
+    fn set_cur_block(&mut self, index: usize, block: u64) -> bool {
         let mut cur_block = unsafe { self.block_mut(index) };
-        let offset = offset_i(index);
-        let mask = if offset == 63 { !0 } else { !0 << (offset + 1) };
-        let data = block >> (64 - (offset + 1));
-        *cur_block = (*cur_block & mask) | data;
+        if block_aligned(index) {
+            *cur_block = block;
+            true
+        } else {
+            let offset = offset_i(index);
+            let mask = !0 << (offset + 1);
+            let data = block >> (64 - (offset + 1));
+            *cur_block = (*cur_block & mask) | data;
+            false
+        }
     }
 
+    // Sets 64 - (64 - block_offset) bits at index 0 of the block
+    // after the block indicated by index
     fn set_next_block(&mut self, index: usize, block: u64) {
         let mut cur_block = unsafe { self.next_block_mut(index) };
         let offset = offset_i(index);
@@ -209,22 +240,28 @@ impl BitVec {
         *cur_block = (*cur_block & mask) | data;
     }
 
+    // Retrieves a reference to the block for the given index
     unsafe fn block(&self, index: usize) -> &u64 {
         self.data.get_unchecked(block_i(index))
     }
 
+    // Retrieves a mutable reference to the block for the given index
     unsafe fn block_mut(&mut self, index: usize) -> &mut u64 {
         self.data.get_unchecked_mut(block_i(index))
     }
 
+    // Retrives a reference to the block after the index block
     unsafe fn next_block(&self, index: usize) -> &u64 {
         self.data.get_unchecked(block_i(index) + 1)
     }
 
+    // Retrieves a mutable reference to the block after the index block
     unsafe fn next_block_mut(&mut self, index: usize) -> &mut u64 {
         self.data.get_unchecked_mut(block_i(index) + 1)
     }
 
+    // Returns if the index resides in a block that is out of bounds
+    // of the current data vector
     fn out_of_bounds(&self, index: usize) -> bool {
         blocks(index + 1) > self.data.len()
     }
@@ -238,6 +275,10 @@ fn block_i(index: usize) -> usize {
 /// Returns the 0-based block offset for index
 fn offset_i(index: usize) -> u64 {
     63 - index as u64 % 64
+}
+
+fn block_aligned(index: usize) -> bool {
+    index % 64 == 0
 }
 
 /// Returns the number of 32 bit blocks it takes to contain
@@ -259,22 +300,22 @@ mod test {
         vec.set_bit(0, true);
         vec.set_bit(5, true);
         vec.set_bit(10, true);
-        assert_eq!(1, vec.get_bit(0));
-        assert_eq!(1, vec.get_bit(5));
-        assert_eq!(1, vec.get_bit(10));
-        assert_eq!(0, vec.get_bit(32));
+        assert_eq!(true, vec.get_bit(0));
+        assert_eq!(true, vec.get_bit(5));
+        assert_eq!(true, vec.get_bit(10));
+        assert_eq!(false, vec.get_bit(32));
         vec.set_bit(10, false);
-        assert_eq!(0, vec.get_bit(10));
+        assert_eq!(false, vec.get_bit(10));
     }
 
     #[test]
     fn test_set_block() {
         let mut vec = BitVec::new();
         vec.set_block(4, !0);
-        assert_eq!(0, vec.get_bit(3));
-        assert_eq!(1, vec.get_bit(4));
-        assert_eq!(1, vec.get_bit(67));
-        assert_eq!(0, vec.get_bit(68));
+        assert_eq!(false, vec.get_bit(3));
+        assert_eq!(true, vec.get_bit(4));
+        assert_eq!(true, vec.get_bit(67));
+        assert_eq!(false, vec.get_bit(68));
     }
 
     #[test]
