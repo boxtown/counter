@@ -43,6 +43,12 @@ mod tests {
     }
 
     #[bench]
+    fn bench_clear(bench: &mut Bencher) {
+        let mut v = BitVec::with_capacity(64);
+        bench.iter(|| v.clear());
+    }
+
+    #[bench]
     fn bench_append(bench: &mut Bencher) {
         let mut v = AppendOnlyBitVec::new();
         bench.iter(|| v.append(11, 0));

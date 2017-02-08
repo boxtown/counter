@@ -1,3 +1,5 @@
+use std::ptr;
+
 pub struct AppendOnlyBitVec {
     vec: BitVec,
     len: usize,
@@ -58,6 +60,13 @@ impl BitVec {
 
     pub fn with_capacity(nbits: usize) -> BitVec {
         BitVec { data: Vec::with_capacity(blocks(nbits)) }
+    }
+
+    pub fn clear(&mut self) {
+        unsafe {
+            let vec_ptr = self.data.as_mut_ptr();
+            ptr::write_bytes(vec_ptr, 0, self.data.len());
+        }
     }
 
     pub fn get_bit(&self, index: usize) -> bool {
@@ -355,6 +364,14 @@ mod test {
         vec.set_block(256, !0);
         assert_eq!(!0, vec.get_block(256));
         assert_eq!(!0u64 << 2, vec.get_block(258));
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut vec = BitVec::new();
+        vec.set_block(0, !0);
+        vec.clear();
+        assert_eq!(0, vec.get_block(0));
     }
 
     #[test]
