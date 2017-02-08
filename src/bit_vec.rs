@@ -1,14 +1,21 @@
 pub struct AppendOnlyBitVec {
     vec: BitVec,
+    len: usize,
 }
 
 impl AppendOnlyBitVec {
     pub fn new() -> AppendOnlyBitVec {
-        AppendOnlyBitVec { vec: BitVec::new() }
+        AppendOnlyBitVec {
+            vec: BitVec::new(),
+            len: 0,
+        }
     }
 
     pub fn with_capacity(nbits: usize) -> AppendOnlyBitVec {
-        AppendOnlyBitVec { vec: BitVec::with_capacity(nbits) }
+        AppendOnlyBitVec {
+            vec: BitVec::with_capacity(nbits),
+            len: 0,
+        }
     }
 
     pub fn get_bit(&self, index: usize) -> bool {
@@ -17,6 +24,26 @@ impl AppendOnlyBitVec {
 
     pub fn get_block(&self, index: usize) -> u64 {
         self.vec.get_block(index)
+    }
+
+    pub fn append(&mut self, bits: usize, data: u64) {
+        match bits {
+            0 => {}
+            1 => {
+                self.vec.set_bit(self.len, data & 1 == 1);
+                self.len += 1;
+            }
+            64 => {
+                self.vec.set_block(self.len, data);
+                self.len += 64;
+            }
+            _ => {
+                let mask = !0 >> (64 - bits as u64);
+                let data = (data & mask) << (63 - bits);
+                self.vec.set_block(self.len, data);
+                self.len += bits;
+            }
+        }
     }
 }
 
@@ -292,7 +319,7 @@ fn blocks(nbits: usize) -> usize {
 
 #[cfg(test)]
 mod test {
-    use super::BitVec;
+    use super::{AppendOnlyBitVec, BitVec};
 
     #[test]
     fn test_get_set() {
@@ -328,5 +355,26 @@ mod test {
         vec.set_block(256, !0);
         assert_eq!(!0, vec.get_block(256));
         assert_eq!(!0u64 << 2, vec.get_block(258));
+    }
+
+    #[test]
+    fn test_append() {
+        let mut vec = AppendOnlyBitVec::new();
+        vec.append(1, 0);
+        assert_eq!(false, vec.get_bit(0));
+        vec.append(0, 1);
+        assert_eq!(false, vec.get_bit(0));
+        vec.append(1, 1);
+        assert_eq!(false, vec.get_bit(0));
+        assert_eq!(true, vec.get_bit(1));
+        vec.append(1, 0); // buffer
+        vec.append(64, !0);
+        assert_eq!(!0 >> 1, vec.get_block(2));
+        assert_eq!(!0, vec.get_block(3));
+        vec.append(3, 3);
+        assert_eq!(false, vec.get_bit(68));
+        assert_eq!(true, vec.get_bit(69));
+        assert_eq!(true, vec.get_bit(70));
+        assert_eq!(false, vec.get_bit(71));
     }
 }

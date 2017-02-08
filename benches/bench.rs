@@ -6,7 +6,7 @@ extern crate counter;
 #[cfg(test)]
 mod tests {
     use test::Bencher;
-    use counter::bit_vec::BitVec;
+    use counter::bit_vec::{AppendOnlyBitVec, BitVec};
 
     #[bench]
     fn bench_set_bit(bench: &mut Bencher) {
@@ -40,5 +40,11 @@ mod tests {
         let mut v = BitVec::new();
         v.set_block(105, !0);
         bench.iter(|| v.get_block(102))
+    }
+
+    #[bench]
+    fn bench_append(bench: &mut Bencher) {
+        let mut v = AppendOnlyBitVec::new();
+        bench.iter(|| v.append(11, 0));
     }
 }
