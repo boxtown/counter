@@ -264,7 +264,6 @@ mod test {
         assert_eq!(1, vec.get_bit(10));
         assert_eq!(0, vec.get_bit(32));
         vec.set_bit(10, false);
-        assert_eq!(vec.last_set_bit(), 6);
         assert_eq!(0, vec.get_bit(10));
     }
 
