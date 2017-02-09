@@ -20,6 +20,14 @@ impl AppendOnlyBitVec {
         }
     }
 
+    pub fn data(&self) -> &[u64] {
+        self.vec.data()
+    }
+
+    pub fn clear(&mut self) {
+        self.vec.clear();
+    }
+
     pub fn get_bit(&self, index: usize) -> bool {
         self.vec.get_bit(index)
     }
@@ -41,7 +49,7 @@ impl AppendOnlyBitVec {
             }
             _ => {
                 let mask = !0 >> (64 - bits as u64);
-                let data = (data & mask) << (63 - bits);
+                let data = (data & mask) << (64 - bits);
                 self.vec.set_block(self.len, data);
                 self.len += bits;
             }
@@ -60,6 +68,10 @@ impl BitVec {
 
     pub fn with_capacity(nbits: usize) -> BitVec {
         BitVec { data: Vec::with_capacity(blocks(nbits)) }
+    }
+
+    pub fn data(&self) -> &[u64] {
+        &self.data
     }
 
     pub fn clear(&mut self) {
@@ -204,7 +216,7 @@ impl BitVec {
         // |----------------------------------------------------------------|
         //     ^
         //     |
-        //   cur_offset (canonical index: 3, actual bit index: 6-)
+        //   cur_offset (canonical index: 3, actual bit index: 60)
         //   63 - 67 % 64 = 60. We do 63 - x so that bit indexes start
         //   at bit 63 and work to bit 0 so that blocks are contiguous
         //
@@ -389,9 +401,9 @@ mod test {
         assert_eq!(!0 >> 1, vec.get_block(2));
         assert_eq!(!0, vec.get_block(3));
         vec.append(3, 3);
-        assert_eq!(false, vec.get_bit(68));
+        assert_eq!(false, vec.get_bit(67));
+        assert_eq!(true, vec.get_bit(68));
         assert_eq!(true, vec.get_bit(69));
-        assert_eq!(true, vec.get_bit(70));
-        assert_eq!(false, vec.get_bit(71));
+        assert_eq!(false, vec.get_bit(70));
     }
 }

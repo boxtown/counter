@@ -3,6 +3,7 @@ extern crate fnv;
 
 pub mod bit_vec;
 
+use std::mem;
 use bit_vec::AppendOnlyBitVec;
 
 struct Last {
@@ -26,8 +27,12 @@ pub struct TimeSeries {
 impl TimeSeries {
     pub fn new() -> TimeSeries {
         let ts = time::get_time().sec;
-        let mut data = AppendOnlyBitVec::with_capacity(128);
-        data.append(64, ts as u64); // set timestamp block
+        TimeSeries::at(ts)
+    }
+
+    pub fn at(ts: i64) -> TimeSeries {
+        let mut data = AppendOnlyBitVec::with_capacity(1024);
+        data.append(64, ts as u64);
         TimeSeries {
             last: None,
             data: data,
@@ -38,9 +43,13 @@ impl TimeSeries {
         self.data.get_block(0)
     }
 
-    // Reference: http://www.vldb.org/pvldb/vol8/p1816-teller.pdf
     pub fn publish(&mut self, value: f64) {
         let ts = time::get_time().sec;
+        self.publish_at(value, ts);
+    }
+
+    // Reference: http://www.vldb.org/pvldb/vol8/p1816-teller.pdf
+    pub fn publish_at(&mut self, value: f64, ts: i64) {
         if let Some(ref mut last) = self.last {
             // timestamp compression
             let Deltas { delta, delta_delta } = TimeSeries::calculate_deltas(last, ts);
@@ -67,7 +76,7 @@ impl TimeSeries {
             }
 
             // value compression
-            let v_u64 = value as u64;
+            let v_u64 = unsafe { mem::transmute::<f64, u64>(value) };
             let xor = v_u64 ^ last.val;
             if xor == 0 {
                 self.data.append(1, 0);
@@ -92,7 +101,7 @@ impl TimeSeries {
             }
         } else {
             // first value is uncompressed
-            let v_u64 = value as u64;
+            let v_u64 = unsafe { mem::transmute::<f64, u64>(value) };
             let last = Last {
                 ts: ts,
                 delta: ts - self.header() as i64,
@@ -112,5 +121,21 @@ impl TimeSeries {
             delta: delta,
             delta_delta: delta - last.delta,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::TimeSeries;
+
+    #[test]
+    fn test_publish() {
+        let mut ts = TimeSeries::at(0);
+        ts.publish_at(2.0, 5);
+        // ts.publish_at(4.0, 10);
+        // ts.publish_at(4.0, 20);
+        // ts.publish_at(2.0, 25);
+        assert_eq!([0u64, 0b0000000000010101000000000000000000000000000000000000000000000000],
+                   ts.data.data());
     }
 }
