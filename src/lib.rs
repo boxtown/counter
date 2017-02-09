@@ -8,6 +8,9 @@ use bit_vec::AppendOnlyBitVec;
 struct Last {
     delta: i64,
     ts: i64,
+    val: u64,
+    leading: u32,
+    trailing: u32,
 }
 
 struct Deltas {
@@ -35,19 +38,11 @@ impl TimeSeries {
         self.data.get_block(0)
     }
 
+    // Reference: http://www.vldb.org/pvldb/vol8/p1816-teller.pdf
     pub fn publish(&mut self, value: f64) {
-        let compress_value = self.append_timestamp();
-
-        // do value compression
-        if !compress_value {
-            self.data.append(64, value as u64);
-        }
-    }
-
-    // Reference: http://www.vldb.org/pvldb/vol8/p1816-teller.pdf Section 4.1.1 Compressing time stamps
-    fn append_timestamp(&mut self) -> bool {
         let ts = time::get_time().sec;
         if let Some(ref mut last) = self.last {
+            // timestamp compression
             let Deltas { delta, delta_delta } = TimeSeries::calculate_deltas(last, ts);
             last.ts = ts;
             last.delta = delta;
@@ -70,15 +65,44 @@ impl TimeSeries {
                     self.data.append(32, delta_delta as u64);
                 }
             }
-            true
+
+            // value compression
+            let v_u64 = value as u64;
+            let xor = v_u64 ^ last.val;
+            if xor == 0 {
+                self.data.append(1, 0);
+            } else {
+                let leading = xor.leading_zeros();
+                let trailing = xor.trailing_zeros();
+                if last.leading <= leading && last.trailing <= trailing {
+                    self.data.append(2, 0b10); // control bits
+                    self.data.append((64 - last.leading - last.trailing) as usize,
+                                     xor >> last.trailing); // meaningful bits
+                } else {
+                    self.data.append(1, 1); // control bit
+                    self.data.append(5, leading as u64); // # leading zeros
+
+                    let n_meaningful = 64 - leading - trailing;
+                    self.data.append(6, n_meaningful as u64); // length of meaninful section in bits
+                    self.data.append(n_meaningful as usize, xor >> trailing); // meaningful bits
+                    last.val = v_u64;
+                    last.leading = leading;
+                    last.trailing = trailing;
+                }
+            }
         } else {
+            // first value is uncompressed
+            let v_u64 = value as u64;
             let last = Last {
                 ts: ts,
                 delta: ts - self.header() as i64,
+                val: v_u64,
+                leading: v_u64.leading_zeros(),
+                trailing: v_u64.trailing_zeros(),
             };
             self.data.append(14, last.delta as u64);
+            self.data.append(64, last.val);
             self.last = Some(last);
-            false
         }
     }
 
