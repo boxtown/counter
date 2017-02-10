@@ -6,6 +6,8 @@ pub mod bit_vec;
 use std::mem;
 use bit_vec::AppendOnlyBitVec;
 
+// contains data point information from the last
+// data point that was published
 struct Last {
     delta: i64,
     ts: i64,
@@ -14,6 +16,7 @@ struct Last {
     trailing: u32,
 }
 
+// Contains calculated timestamp delta information
 struct Deltas {
     delta: i64,
     delta_delta: i64,
@@ -78,11 +81,11 @@ impl TimeSeries {
             // value compression
             let v_u64 = unsafe { mem::transmute::<f64, u64>(value) };
             let xor = v_u64 ^ last.val;
+            let leading = xor.leading_zeros();
+            let trailing = xor.trailing_zeros();
             if xor == 0 {
                 self.data.append(1, 0);
             } else {
-                let leading = xor.leading_zeros();
-                let trailing = xor.trailing_zeros();
                 if last.leading <= leading && last.trailing <= trailing {
                     self.data.append(2, 0b10); // control bits
                     self.data.append((64 - last.leading - last.trailing) as usize,
@@ -94,11 +97,11 @@ impl TimeSeries {
                     let n_meaningful = 64 - leading - trailing;
                     self.data.append(6, n_meaningful as u64); // length of meaninful section in bits
                     self.data.append(n_meaningful as usize, xor >> trailing); // meaningful bits
-                    last.val = v_u64;
-                    last.leading = leading;
-                    last.trailing = trailing;
                 }
             }
+            last.val = v_u64;
+            last.leading = leading;
+            last.trailing = trailing;
         } else {
             // first value is uncompressed
             let v_u64 = unsafe { mem::transmute::<f64, u64>(value) };
@@ -132,10 +135,13 @@ mod test {
     fn test_publish() {
         let mut ts = TimeSeries::at(0);
         ts.publish_at(2.0, 5);
-        // ts.publish_at(4.0, 10);
-        // ts.publish_at(4.0, 20);
-        // ts.publish_at(2.0, 25);
-        assert_eq!([0u64, 0b0000000000010101000000000000000000000000000000000000000000000000],
+        ts.publish_at(4.0, 10);
+        ts.publish_at(4.0, 20);
+        ts.publish_at(2.0, 25);
+        assert_eq!([0u64,
+                    0b0000000000010101000000000000000000000000000000000000000000000000,
+                    0b0000000000000001010110000011100000101010111101110101100000110000,
+                    0],
                    ts.data.data());
     }
 }
