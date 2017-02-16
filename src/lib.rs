@@ -22,12 +22,12 @@ struct Deltas {
     delta_delta: i64,
 }
 
-pub struct TimeSeries {
+pub struct TimeSeriesBlock {
     last: Option<Last>,
     data: AppendOnlyBitVec,
 }
 
-impl TimeSeries {
+impl TimeSeriesBlock {
     pub fn new() -> TimeSeries {
         let ts = time::get_time().sec;
         TimeSeries::at(ts)
@@ -129,11 +129,11 @@ impl TimeSeries {
 
 #[cfg(test)]
 mod test {
-    use super::TimeSeries;
+    use super::TimeSeriesBlock;
 
     #[test]
     fn test_publish() {
-        let mut ts = TimeSeries::at(0);
+        let mut ts = TimeSeriesBlock::at(0);
         ts.publish_at(2.0, 5);
         ts.publish_at(4.0, 10);
         ts.publish_at(4.0, 20);
