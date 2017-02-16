@@ -22,21 +22,27 @@ struct Deltas {
     delta_delta: i64,
 }
 
+// Contains compressed block info
+struct CompressedBlock {
+    bits: usize,
+    block: u64,
+}
+
 pub struct TimeSeriesBlock {
     last: Option<Last>,
     data: AppendOnlyBitVec,
 }
 
 impl TimeSeriesBlock {
-    pub fn new() -> TimeSeries {
+    pub fn new() -> TimeSeriesBlock {
         let ts = time::get_time().sec;
-        TimeSeries::at(ts)
+        TimeSeriesBlock::at(ts)
     }
 
-    pub fn at(ts: i64) -> TimeSeries {
+    pub fn at(ts: i64) -> TimeSeriesBlock {
         let mut data = AppendOnlyBitVec::with_capacity(1024);
         data.append(64, ts as u64);
-        TimeSeries {
+        TimeSeriesBlock {
             last: None,
             data: data,
         }
@@ -55,28 +61,12 @@ impl TimeSeriesBlock {
     pub fn publish_at(&mut self, value: f64, ts: i64) {
         if let Some(ref mut last) = self.last {
             // timestamp compression
-            let Deltas { delta, delta_delta } = TimeSeries::calculate_deltas(last, ts);
+            let Deltas { delta, delta_delta } = TimeSeriesBlock::calculate_deltas(last, ts);
             last.ts = ts;
             last.delta = delta;
-            match delta_delta {
-                0 => self.data.append(1, 0),
-                -63...64 => {
-                    self.data.append(2, 0b10);
-                    self.data.append(7, delta_delta as u64);
-                }
-                -255...256 => {
-                    self.data.append(3, 0b110);
-                    self.data.append(9, delta_delta as u64);
-                }
-                -2047...2048 => {
-                    self.data.append(4, 0b1110);
-                    self.data.append(12, delta_delta as u64);
-                }
-                _ => {
-                    self.data.append(4, 0b1111);
-                    self.data.append(32, delta_delta as u64);
-                }
-            }
+            let CompressedBlock { bits, block } =
+                TimeSeriesBlock::compressed_time_block(delta_delta);
+            self.data.append(bits, block);
 
             // value compression
             let v_u64 = unsafe { mem::transmute::<f64, u64>(value) };
@@ -123,6 +113,45 @@ impl TimeSeriesBlock {
         Deltas {
             delta: delta,
             delta_delta: delta - last.delta,
+        }
+    }
+
+    fn compressed_time_block(dd: i64) -> CompressedBlock {
+        match dd {
+            0 => {
+                CompressedBlock {
+                    bits: 1,
+                    block: 0,
+                }
+            }
+            -63...64 => {
+                let masked_value = dd as u64 & (!0 >> 57);
+                CompressedBlock {
+                    bits: 9,
+                    block: (0b10 << 7) | masked_value,
+                }
+            }
+            -255...256 => {
+                let masked_value = dd as u64 & (!0 >> 55);
+                CompressedBlock {
+                    bits: 12,
+                    block: (0b110 << 9) | masked_value,
+                }
+            }
+            -2047...2048 => {
+                let masked_value = dd as u64 & (!0 >> 52);
+                CompressedBlock {
+                    bits: 16,
+                    block: (0b1110 << 12) | masked_value,
+                }
+            }
+            _ => {
+                let masked_value = dd as u64 & (!0 >> 32);
+                CompressedBlock {
+                    bits: 36,
+                    block: (0b1111 << 32) | masked_value,
+                }
+            }
         }
     }
 }
